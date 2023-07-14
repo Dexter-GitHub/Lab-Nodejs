@@ -2,35 +2,8 @@ var http = require('http');
 var fs = require('fs');
 var url = require('url');
 var qs = require('querystring');
-
-function templateHTML(title, list, body, control) {
-  return `
-        <!doctype html>
-        <html>
-        <head>
-        <title>WEB1 - ${title}</title>
-        <meta charset="utf-8">
-        </head>
-        <body>
-        <h1><a href="/">WEB</a></h1>      
-        ${list}      
-        ${control}
-        ${body}
-        </body>
-        </html>`;
-}
-
-function templateList(filelist) {
-  var list = '<ul>' ;
-  var i = 0;
-  while (i < filelist.length) {
-    list = list + `<li><a href="/?id=${filelist[i]}">${filelist[i]}</a></li>`;
-    i++;
-  }
-  list = list + '</ul>';
-
-  return list;
-}
+var template = require('./lib/template.js');
+var path = require('path');
 
 var app = http.createServer(function (request, response) {
   var _url = request.url;
@@ -42,21 +15,23 @@ var app = http.createServer(function (request, response) {
       fs.readdir('./data', function (error, filelist) {           
         var title = 'Welcome';
         var description = 'Hello, Node.js';     
-        var list = templateList(filelist);
-        var template = templateHTML(title, list,
+        var list = template.list(filelist);
+        var html = template.html(title, list,
            `<h2>${title}</h2></p>${description}</p>`,
            `<a href="/create">create</a>`);
         response.writeHead(200);
-        response.end(template);     
+        response.end(html);     
       });  
     }
     else {
       fs.readdir('./data', function (error, filelist) { 
-        fs.readFile(`data/${queryData.id}`, 'utf8', 
+        /* 보안용 코드 */
+        var filteredId = path.parse(queryData.id).base;
+        fs.readFile(`data/${filteredId}`, 'utf8', 
         function (err, description) {        
           var title = queryData.id;
-          var list = templateList(filelist);
-          var template = templateHTML(title, list, 
+          var list = template.list(filelist);
+          var html = template.html(title, list, 
             `<h2>${title}</h2></p>${description}</p>`,
             `<a href="/create">create</a> 
              <a href="/update?id=${title}">update</a>
@@ -65,7 +40,7 @@ var app = http.createServer(function (request, response) {
               <input type="submit" value="delete">
              </form>`);         
           response.writeHead(200);
-          response.end(template); 
+          response.end(html); 
         });
       });
     }
@@ -73,8 +48,8 @@ var app = http.createServer(function (request, response) {
   else if (pathname === '/create') {
     fs.readdir('./data', function (error, filelist) { 
       var title = 'WEB - create';
-      var list = templateList(filelist);
-      var template = templateHTML(title, list, 
+      var list = template.list(filelist);
+      var html = template.html(title, list, 
       `<form action="/create_process" method="post">
         <p><input type="text" name="title" placeholder="title"></p>
         <p>
@@ -85,7 +60,7 @@ var app = http.createServer(function (request, response) {
         </p>
       </form>`, '');
       response.writeHead(200);
-      response.end(template); 
+      response.end(html); 
     });
   }
   else if (pathname === '/create_process') {
@@ -107,11 +82,12 @@ var app = http.createServer(function (request, response) {
   }
   else if (pathname === '/update') {
     fs.readdir('./data', function (error, filelist) { 
-      fs.readFile(`data/${queryData.id}`, 'utf8', 
+      var filteredId = path.parse(queryData.id).base;
+      fs.readFile(`data/${filteredId}`, 'utf8', 
       function (err, description) {        
         var title = queryData.id;
-        var list = templateList(filelist);
-        var template = templateHTML(title, list, 
+        var list = template.list(filelist);
+        var html = template.html(title, list, 
           `<form action="/update_process" method="post">
             <input type="hidden" name="id" value="${title}">
             <p><input type="text" name="title" placeholder="title" value="${title}"></p>
@@ -124,7 +100,7 @@ var app = http.createServer(function (request, response) {
           </form>`,
           `<a href="/create">create</a> <a href="/update?id=${title}">update</a>`);         
         response.writeHead(200);
-        response.end(template); 
+        response.end(html); 
       });
     });
   }
@@ -157,12 +133,9 @@ var app = http.createServer(function (request, response) {
     /* 정보 수집 끝 */
     request.on('end', function() {
       var post = qs.parse(body);
-      var id = post.id;
-      console.log(post);
-      console.log(post.id);
-      console.log(id);
-
-      fs.unlink(`data/${id}`, function (err) {
+      var id = post.id;      
+      var filteredId = path.parse(id).base;
+      fs.unlink(`data/${filteredId}`, function (err) {
         response.writeHead(302, {Location: `/`});
         response.end();         
       });
